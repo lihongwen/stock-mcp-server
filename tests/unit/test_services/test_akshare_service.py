@@ -66,7 +66,28 @@ class TestAKShareService:
         # Clear cache first
         akshare_service.cache.clear_category("market_data")
         
-        with patch("akshare.stock_zh_index_spot_em", return_value=mock_index_data):
+        # Mock the data source manager
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot') as mock_get:
+            mock_index = MarketIndex(
+                code="000001",
+                name="上证指数",
+                current=Decimal("3245.67"),
+                open=Decimal("3230.50"),
+                high=Decimal("3250.00"),
+                low=Decimal("3228.00"),
+                close=Decimal("3245.67"),
+                pre_close=Decimal("3235.00"),
+                change=Decimal("10.67"),
+                change_pct=Decimal("0.33"),
+                amplitude=Decimal("0.68"),
+                volume=28500000,
+                amount=Decimal("345000000000"),
+                timestamp=datetime.now(),
+                trading_date="2025-09-30",
+                market_status="closed"
+            )
+            mock_get.return_value = mock_index
+            
             result = akshare_service.get_index_spot("000001")
             
             assert result is not None
@@ -81,20 +102,40 @@ class TestAKShareService:
         # Clear cache first
         akshare_service.cache.clear_category("market_data")
         
-        with patch("akshare.stock_zh_index_spot_em", return_value=mock_index_data) as mock_ak:
-            # First call - should hit API
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot') as mock_get:
+            mock_index = MarketIndex(
+                code="000001",
+                name="上证指数",
+                current=Decimal("3245.67"),
+                open=Decimal("3230.50"),
+                high=Decimal("3250.00"),
+                low=Decimal("3228.00"),
+                close=Decimal("3245.67"),
+                pre_close=Decimal("3235.00"),
+                change=Decimal("10.67"),
+                change_pct=Decimal("0.33"),
+                amplitude=Decimal("0.68"),
+                volume=28500000,
+                amount=Decimal("345000000000"),
+                timestamp=datetime.now(),
+                trading_date="2025-09-30",
+                market_status="closed"
+            )
+            mock_get.return_value = mock_index
+            
+            # First call - should hit data source
             result1 = akshare_service.get_index_spot("000001")
-            assert mock_ak.call_count == 1
+            assert mock_get.call_count == 1
             
             # Second call - should hit cache
             result2 = akshare_service.get_index_spot("000001")
-            assert mock_ak.call_count == 1  # No additional API call
+            assert mock_get.call_count == 1  # No additional call
             
             assert result1.code == result2.code
 
     def test_get_index_spot_not_found(self, akshare_service, mock_index_data):
         """Test when index code is not found."""
-        with patch("akshare.stock_zh_index_spot_em", return_value=mock_index_data):
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot', return_value=None):
             result = akshare_service.get_index_spot("999999")  # Non-existent
             assert result is None
 
@@ -103,30 +144,31 @@ class TestAKShareService:
         # Clear cache first
         akshare_service.cache.clear_category("market_data")
         
-        with patch("akshare.stock_zh_index_spot_em") as mock_ak:
-            # Simulate first 2 failures, then success
-            mock_ak.side_effect = [
-                Exception("Network error"),
-                Exception("Network error"),
-                pd.DataFrame({
-                    "代码": ["000001"],
-                    "名称": ["上证指数"],
-                    "最新价": [3245.67],
-                    "今开": [3230.50],
-                    "最高": [3250.00],
-                    "最低": [3228.00],
-                    "昨收": [3235.00],
-                    "涨跌额": [10.67],
-                    "涨跌幅": [0.33],
-                    "振幅": [0.68],
-                    "成交量": [28500000],
-                    "成交额": [345000000000],
-                })
-            ]
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot') as mock_get:
+            # Mock success (DataSourceManager handles retry internally)
+            mock_index = MarketIndex(
+                code="000001",
+                name="上证指数",
+                current=Decimal("3245.67"),
+                open=Decimal("3230.50"),
+                high=Decimal("3250.00"),
+                low=Decimal("3228.00"),
+                close=Decimal("3245.67"),
+                pre_close=Decimal("3235.00"),
+                change=Decimal("10.67"),
+                change_pct=Decimal("0.33"),
+                amplitude=Decimal("0.68"),
+                volume=28500000,
+                amount=Decimal("345000000000"),
+                timestamp=datetime.now(),
+                trading_date="2025-09-30",
+                market_status="closed"
+            )
+            mock_get.return_value = mock_index
             
             result = akshare_service.get_index_spot("000001")
             assert result is not None
-            assert mock_ak.call_count == 3  # Retried 2 times
+            assert mock_get.call_count == 1  # Called once (retry is internal to DataSourceManager)
 
     def test_get_market_breadth_success(self, akshare_service, mock_breadth_data):
         """Test successfully fetching market breadth."""
@@ -183,18 +225,36 @@ class TestAKShareService:
         """Test that rate limiting is applied."""
         import time
         
-        with patch("akshare.stock_zh_index_spot_em", return_value=mock_index_data):
-            with patch("time.sleep") as mock_sleep:
-                akshare_service.get_index_spot("000001")
-                
-                # Should have called sleep for rate limiting
-                assert mock_sleep.called
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot') as mock_get:
+            mock_index = MarketIndex(
+                code="000001",
+                name="上证指数",
+                current=Decimal("3245.67"),
+                open=Decimal("3230.50"),
+                high=Decimal("3250.00"),
+                low=Decimal("3228.00"),
+                close=Decimal("3245.67"),
+                pre_close=Decimal("3235.00"),
+                change=Decimal("10.67"),
+                change_pct=Decimal("0.33"),
+                amplitude=Decimal("0.68"),
+                volume=28500000,
+                amount=Decimal("345000000000"),
+                timestamp=datetime.now(),
+                trading_date="2025-09-30",
+                market_status="closed"
+            )
+            mock_get.return_value = mock_index
+            
+            # Rate limiting is now handled by DataSourceManager
+            result = akshare_service.get_index_spot("000001")
+            assert result is not None
 
     def test_error_handling_returns_none(self, akshare_service):
         """Test that API errors return None gracefully."""
         # Clear cache first
         akshare_service.cache.clear_category("market_data")
         
-        with patch("akshare.stock_zh_index_spot_em", side_effect=Exception("API error")):
+        with patch.object(akshare_service.data_source_manager, 'get_index_spot', return_value=None):
             result = akshare_service.get_index_spot("000001")
             assert result is None

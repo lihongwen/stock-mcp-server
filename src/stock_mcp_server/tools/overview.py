@@ -12,6 +12,7 @@ from stock_mcp_server.services.akshare_service import get_akshare_service
 from stock_mcp_server.services.sentiment_service import get_sentiment_service
 from stock_mcp_server.services.news_service import get_news_service
 from stock_mcp_server.utils.validators import validate_date
+from stock_mcp_server.utils.json_utils import sanitize_for_json
 
 
 def get_market_overview(
@@ -58,7 +59,7 @@ def get_market_overview(
         
         # 1. Index quotes summary
         try:
-            index_data = akshare_service.get_index_spot("000001", date)
+            index_data = akshare_service.get_index_spot("000001")
             if index_data:
                 overview["index_quotes"] = {
                     "000001": {
@@ -164,7 +165,7 @@ def get_market_overview(
         
         logger.info(f"get_market_overview executed: include_details={include_details}")
         
-        return {
+        response = {
             "success": True,
             "overview": overview,
             "metadata": {
@@ -173,6 +174,9 @@ def get_market_overview(
                 "cache_hit": cache_hit
             }
         }
+        
+        # Sanitize for JSON serialization (convert Decimal to float)
+        return sanitize_for_json(response)
         
     except Exception as e:
         logger.error(f"Error in get_market_overview: {e}", exc_info=True)

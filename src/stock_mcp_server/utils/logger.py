@@ -21,10 +21,11 @@ def setup_logging() -> None:
     # Ensure log directory exists
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    # Console handler - colorized output
+    # Console handler - only for ERROR and above to avoid interfering with MCP stdio
+    # MCP servers use stdin/stdout for JSON-RPC, so we minimize stderr output
     logger.add(
         sys.stderr,
-        level=log_level,
+        level="ERROR",  # Only log errors to stderr to avoid MCP communication issues
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         colorize=True,
     )

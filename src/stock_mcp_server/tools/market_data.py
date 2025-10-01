@@ -10,6 +10,7 @@ from loguru import logger
 
 from stock_mcp_server.services.akshare_service import get_akshare_service
 from stock_mcp_server.utils.validators import validate_date
+from stock_mcp_server.utils.json_utils import sanitize_for_json
 
 
 def get_market_data(
@@ -122,7 +123,9 @@ def get_market_data(
         }
         
         logger.info(f"get_market_data executed: type={data_type}, code={index_code}, cache_hit={cache_hit}")
-        return result
+        
+        # Sanitize for JSON serialization (convert Decimal to float)
+        return sanitize_for_json(result)
         
     except Exception as e:
         logger.error(f"Error in get_market_data: {e}", exc_info=True)
@@ -143,7 +146,9 @@ def get_market_data(
 
 def _get_realtime_data(service: Any, index_code: str, date: str | None) -> dict[str, Any]:
     """Get real-time index data."""
-    index_data = service.get_index_spot(index_code, date)
+    # Note: date parameter is not used for real-time data (always gets latest)
+    # If a specific date is needed, use historical data instead
+    index_data = service.get_index_spot(index_code)
     
     if not index_data:
         raise ValueError(f"No data available for index {index_code}")
@@ -236,9 +241,9 @@ def _get_all_data(service: Any, index_code: str, date: str | None) -> dict[str, 
     """Get comprehensive market data."""
     result = {"data": {}}
     
-    # Get real-time index
+    # Get real-time index (date parameter not used for real-time data)
     try:
-        index_data = service.get_index_spot(index_code, date)
+        index_data = service.get_index_spot(index_code)
         if index_data:
             result["data"]["index"] = index_data.model_dump()
     except Exception as e:

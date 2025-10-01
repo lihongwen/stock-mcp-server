@@ -140,4 +140,6 @@ cache/
 logs/
 config.yaml
 !config.yaml.example
+.pypitoken
+.pypirc
 

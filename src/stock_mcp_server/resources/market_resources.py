@@ -118,12 +118,20 @@ def read_resource(uri: str) -> dict[str, Any]:
         ValueError: If URI is invalid or resource not found
     """
     try:
-        logger.info(f"Reading resource: {uri}")
+        # Ensure uri is a string (convert from AnyUrl if needed)
+        uri_str = str(uri) if not isinstance(uri, str) else uri
+        logger.info(f"Reading resource: {uri_str}")
         
         # Parse URI
-        parsed = urlparse(uri)
-        path = parsed.path or parsed.netloc + (parsed.path or "")
+        parsed = urlparse(uri_str)
+        # Combine netloc and path, remove leading slash
+        if parsed.netloc:
+            path = (parsed.netloc + parsed.path).lstrip('/')
+        else:
+            path = parsed.path.lstrip('/')
         query_params = parse_qs(parsed.query)
+        
+        logger.debug(f"Parsed URI - scheme: {parsed.scheme}, netloc: {parsed.netloc}, path: {parsed.path}, combined: {path}")
         
         # Route to appropriate resource handler
         if path.startswith("summary/"):
@@ -166,16 +174,18 @@ def read_resource(uri: str) -> dict[str, Any]:
             return get_macro_calendar(query_params)
             
         else:
-            raise ValueError(f"Unknown resource URI: {uri}")
+            raise ValueError(f"Unknown resource URI: {uri_str}")
             
     except Exception as e:
-        logger.error(f"Error reading resource {uri}: {e}")
+        # Use uri_str if available, otherwise convert uri to string
+        uri_display = uri_str if 'uri_str' in locals() else str(uri)
+        logger.error(f"Error reading resource {uri_display}: {e}")
         return {
-            "uri": uri,
+            "uri": uri_display,
             "error": {
                 "code": "RESOURCE_ERROR",
                 "message": str(e),
-                "details": f"Failed to read resource: {uri}",
+                "details": f"Failed to read resource: {uri_display}",
             },
             "metadata": {
                 "generated_at": datetime.now().isoformat(),

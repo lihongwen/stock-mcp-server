@@ -4,7 +4,7 @@ Implements calculate_indicators tool according to contract specification.
 """
 
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from loguru import logger
 
@@ -21,6 +21,7 @@ def calculate_indicators(
     start_date: str | None = None,
     end_date: str | None = None,
     symbol: str = "000001",
+    date: str | None = None,
 ) -> dict[str, Any]:
     """
     Calculate 50+ technical indicators across multiple categories.
@@ -50,8 +51,82 @@ def calculate_indicators(
         akshare_service = get_akshare_service()
         
         # Get historical data for calculation
-        # For now, use a simplified approach
-        # Full implementation would fetch proper historical data
+        # Fetch at least 100 days of data for reliable indicator calculation
+        try:
+            from stock_mcp_server.models.market import HistoricalPrice
+            
+            # If no end_date specified, use today
+            if not end_date:
+                end_date = datetime.now().strftime("%Y-%m-%d")
+            
+            # If no start_date specified, use 100 days ago
+            if not start_date:
+                start_dt = datetime.now() - timedelta(days=100)
+                start_date = start_dt.strftime("%Y-%m-%d")
+            
+            # Fetch historical data from akshare
+            adjust_type = "qfq"  # Default to forward adjustment
+            hist_data_raw = akshare_service.get_stock_hist(
+                symbol=symbol,
+                period="daily",
+                start_date=start_date,
+                end_date=end_date,
+                adjust=adjust_type
+            )
+            
+            if not hist_data_raw or len(hist_data_raw) < 20:
+                logger.warning(f"Insufficient historical data: got {len(hist_data_raw) if hist_data_raw else 0} days")
+                return {
+                    "success": False,
+                    "metadata": {
+                        "query_time": query_time,
+                        "data_source": "none"
+                    },
+                    "error": {
+                        "code": "INSUFFICIENT_DATA",
+                        "message": "Not enough historical data for calculation",
+                        "details": f"Need at least 20 days, got {len(hist_data_raw) if hist_data_raw else 0} days"
+                    }
+                }
+            
+            # Convert to HistoricalPrice objects
+            from stock_mcp_server.models.market import TimeFrame, AdjustType
+            price_data = []
+            for item in hist_data_raw:
+                # Handle date field - could be datetime.date or string
+                date_val = item.get("日期", item.get("date", ""))
+                if hasattr(date_val, 'strftime'):
+                    date_str = date_val.strftime("%Y-%m-%d")
+                else:
+                    date_str = str(date_val)
+                
+                price_data.append(HistoricalPrice(
+                    symbol=symbol,
+                    date=date_str,
+                    timeframe=TimeFrame.DAILY,
+                    adjust=AdjustType.FORWARD if adjust_type == "qfq" else AdjustType.NONE,
+                    open=float(item.get("开盘", item.get("open", 0))),
+                    high=float(item.get("最高", item.get("high", 0))),
+                    low=float(item.get("最低", item.get("low", 0))),
+                    close=float(item.get("收盘", item.get("close", 0))),
+                    volume=int(item.get("成交量", item.get("volume", 0))),
+                    amount=float(item.get("成交额", item.get("amount", 0)))
+                ))
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch historical data: {e}")
+            return {
+                "success": False,
+                "metadata": {
+                    "query_time": query_time,
+                    "data_source": "none"
+                },
+                "error": {
+                    "code": "DATA_FETCH_ERROR",
+                    "message": "Failed to fetch historical data",
+                    "details": str(e)
+                }
+            }
         
         results = []
         cache_hit = False
@@ -64,19 +139,19 @@ def calculate_indicators(
             indicator_list = _get_indicators_by_category(category)
         else:
             # Calculate a default set
-            indicator_list = ["ma", "rsi", "macd", "kdj", "boll"]
+            indicator_list = ["MA", "RSI", "MACD", "KDJ", "BOLL"]
         
         # Calculate each indicator
         for indicator_name in indicator_list:
             try:
-                indicator_result = _calculate_single_indicator(
+                indicator_results = _calculate_single_indicator(
                     indicator_service,
                     indicator_name,
-                    symbol,
+                    price_data,
                     params or {}
                 )
-                if indicator_result:
-                    results.append(indicator_result)
+                if indicator_results:
+                    results.extend(indicator_results)
             except Exception as e:
                 logger.warning(f"Failed to calculate {indicator_name}: {e}")
                 continue
@@ -137,26 +212,59 @@ def _get_indicators_by_category(category: str) -> list[str]:
 def _calculate_single_indicator(
     service: Any,
     indicator_name: str,
-    symbol: str,
+    price_data: list,
     params: dict[str, Any]
-) -> dict[str, Any] | None:
-    """Calculate a single indicator."""
+) -> list[dict[str, Any]]:
+    """Calculate a single indicator.
+    
+    Args:
+        service: IndicatorService instance
+        indicator_name: Name of indicator (MA, RSI, etc.)
+        price_data: List of HistoricalPrice objects
+        params: Indicator parameters
+        
+    Returns:
+        List of indicator dictionaries
+    """
     try:
         # Map indicator names to service methods
-        if indicator_name.lower() == "ma":
-            return service.calculate_ma(symbol, params.get("period", 20))
-        elif indicator_name.lower() == "rsi":
-            return service.calculate_rsi(symbol, params.get("period", 14))
-        elif indicator_name.lower() == "macd":
-            return service.calculate_macd(symbol)
-        elif indicator_name.lower() == "kdj":
-            return service.calculate_kdj(symbol)
-        elif indicator_name.lower() == "boll":
-            return service.calculate_bollinger(symbol, params.get("period", 20))
+        indicator_name_upper = indicator_name.upper()
+        
+        if indicator_name_upper == "MA":
+            results = service.calculate_ma(price_data, params.get("period", 20))
+        elif indicator_name_upper == "EMA":
+            results = service.calculate_ema(price_data, params.get("period", 12))
+        elif indicator_name_upper == "RSI":
+            results = service.calculate_rsi(price_data, params.get("period", 14))
+        elif indicator_name_upper == "MACD":
+            results = service.calculate_macd(price_data)
+        elif indicator_name_upper == "KDJ":
+            results = service.calculate_kdj(price_data, params.get("period", 9))
+        elif indicator_name_upper == "BOLL":
+            results = service.calculate_boll(price_data, params.get("period", 20))
+        elif indicator_name_upper == "ATR":
+            results = service.calculate_atr(price_data, params.get("period", 14))
         else:
             # Unsupported indicator
             logger.warning(f"Unsupported indicator: {indicator_name}")
-            return None
+            return []
+        
+        # Convert TechnicalIndicator objects to dictionaries
+        return [_indicator_to_dict(ind) for ind in results]
+        
     except Exception as e:
-        logger.error(f"Error calculating {indicator_name}: {e}")
-        return None
+        logger.error(f"Error calculating {indicator_name}: {e}", exc_info=True)
+        return []
+
+
+def _indicator_to_dict(indicator: Any) -> dict[str, Any]:
+    """Convert TechnicalIndicator object to dictionary."""
+    return {
+        "name": indicator.name,
+        "category": indicator.category.value if hasattr(indicator.category, 'value') else str(indicator.category),
+        "period": indicator.period,
+        "values": {k: float(v) for k, v in indicator.values.items()},
+        "signal": indicator.signal.value if hasattr(indicator.signal, 'value') else str(indicator.signal),
+        "interpretation": indicator.interpretation,
+        "date": indicator.date
+    }

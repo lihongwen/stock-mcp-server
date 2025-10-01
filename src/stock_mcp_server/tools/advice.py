@@ -12,6 +12,7 @@ from stock_mcp_server.services.indicator_service import get_indicator_service
 from stock_mcp_server.services.sentiment_service import get_sentiment_service
 from stock_mcp_server.services.akshare_service import get_akshare_service
 from stock_mcp_server.utils.validators import validate_date
+from stock_mcp_server.utils.json_utils import sanitize_for_json
 
 
 def generate_advice(
@@ -59,7 +60,7 @@ def generate_advice(
         
         # Check if we have sufficient data
         try:
-            index_data = akshare_service.get_index_spot("000001", date)
+            index_data = akshare_service.get_index_spot("000001")
             if not index_data:
                 return {
                     "success": False,
@@ -158,7 +159,7 @@ def generate_advice(
         
         logger.info(f"generate_advice executed: depth={analysis_depth}, outlook={market_outlook}")
         
-        return {
+        response = {
             "success": True,
             "recommendation": {
                 "market_outlook": market_outlook,
@@ -178,6 +179,9 @@ def generate_advice(
                 }
             }
         }
+        
+        # Sanitize for JSON serialization (convert Decimal to float)
+        return sanitize_for_json(response)
         
     except Exception as e:
         logger.error(f"Error in generate_advice: {e}", exc_info=True)

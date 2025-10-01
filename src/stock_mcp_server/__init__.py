@@ -1,6 +1,6 @@
 """Stock MCP Server - Comprehensive Chinese A-share market data and analysis."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Your Name"
 __license__ = "MIT"
 

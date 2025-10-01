@@ -10,6 +10,7 @@ from loguru import logger
 
 from stock_mcp_server.services.akshare_service import get_akshare_service
 from stock_mcp_server.utils.validators import validate_date
+from stock_mcp_server.utils.json_utils import sanitize_for_json
 
 
 def get_money_flow(
@@ -112,7 +113,7 @@ def get_money_flow(
         
         logger.info(f"get_money_flow executed: flow_type={flow_type}, cache_hit={cache_hit}")
         
-        return {
+        response = {
             "success": True,
             "flow_type": flow_type,
             "data": filtered_data,
@@ -122,6 +123,9 @@ def get_money_flow(
                 "cache_hit": cache_hit
             }
         }
+        
+        # Sanitize for JSON serialization (convert Decimal to float)
+        return sanitize_for_json(response)
         
     except Exception as e:
         logger.error(f"Error in get_money_flow: {e}", exc_info=True)

@@ -1515,7 +1515,7 @@ wheels = [
 
 [[package]]
 name = "stock-mcp-server"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -1544,6 +1544,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "types-beautifulsoup4" },
+    { name = "types-cachetools" },
     { name = "types-pyyaml" },
     { name = "types-requests" },
 ]
@@ -1572,6 +1573,7 @@ requires-dist = [
     { name = "snownlp", specifier = ">=0.12.3" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "types-beautifulsoup4", marker = "extra == 'dev'", specifier = ">=4.12.0" },
+    { name = "types-cachetools", marker = "extra == 'dev'", specifier = ">=5.3.0" },
     { name = "types-pyyaml", marker = "extra == 'dev'", specifier = ">=6.0.0" },
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.31.0" },
 ]
@@ -1608,6 +1610,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/6d/d1/32b410f6d65eda94d3dfb0b3d0ca151f12cb1dc4cef731dcf7cbfd8716ff/types_beautifulsoup4-4.12.0.20250516.tar.gz", hash = "sha256:aa19dd73b33b70d6296adf92da8ab8a0c945c507e6fb7d5db553415cc77b417e", size = 16628, upload_time = "2025-05-16T03:09:09.93Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7c/79/d84de200a80085b32f12c5820d4fd0addcbe7ba6dce8c1c9d8605e833c8e/types_beautifulsoup4-4.12.0.20250516-py3-none-any.whl", hash = "sha256:5923399d4a1ba9cc8f0096fe334cc732e130269541d66261bb42ab039c0376ee", size = 16879, upload_time = "2025-05-16T03:09:09.051Z" },
+]
+
+[[package]]
+name = "types-cachetools"
+version = "6.2.0.20250827"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/31/f2/e14f51330093fd640fd11663863dc7dd80e5894ef9d2eb39325cc61ba3cf/types_cachetools-6.2.0.20250827.tar.gz", hash = "sha256:f27febfd1b5e517e3cb1ca6daf38ad6ddb4eeb1e29bdbd81a082971ba30c0d8e", size = 9128, upload_time = "2025-08-27T02:56:50.593Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/80/9c/be9d24c246ff825385b4a139409ae7e2d36ea2294f12681951a6b9f905f7/types_cachetools-6.2.0.20250827-py3-none-any.whl", hash = "sha256:96ae5abcb5ea1e1f1faf811a2ff8b2ce7e6d820fc42c4fcb4b332b2da485de16", size = 8940, upload_time = "2025-08-27T02:56:49.645Z" },
 ]
 
 [[package]]

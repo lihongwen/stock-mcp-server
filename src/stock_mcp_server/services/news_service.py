@@ -34,6 +34,34 @@ class NewsService:
         self._last_request_time = {}  # Track last request time per source
         logger.info("News service initialized")
 
+    def fetch_latest_news(
+        self,
+        limit: int = 10,
+        category: Optional[NewsCategory] = None,
+        hours_back: int = 24
+    ) -> List[NewsArticle]:
+        """Fetch latest news articles.
+        
+        Args:
+            limit: Maximum number of articles to return
+            category: Filter by category (optional)
+            hours_back: How many hours back to fetch news
+            
+        Returns:
+            List of news articles
+        """
+        try:
+            # Use get_news to fetch articles
+            articles = self.get_news(
+                category=category or NewsCategory.ALL,
+                limit=limit,
+                hours_back=hours_back
+            )
+            return articles
+        except Exception as e:
+            logger.error(f"Failed to fetch latest news: {e}")
+            return []
+
     def get_headers(self) -> dict:
         """Get HTTP headers for requests"""
         return {

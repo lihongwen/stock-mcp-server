@@ -10,6 +10,7 @@ from loguru import logger
 
 from stock_mcp_server.services.news_service import get_news_service
 from stock_mcp_server.services.sentiment_service import get_sentiment_service
+from stock_mcp_server.utils.json_utils import sanitize_for_json
 
 
 def get_news(
@@ -35,29 +36,67 @@ def get_news(
         News articles with sentiment analysis
     """
     query_time = datetime.now().isoformat()
+    news_articles = []
+    data_source = "none"
+    sources_tried = []
+    cache_hit = False
     
     try:
         news_service = get_news_service()
         sentiment_service = get_sentiment_service()
-        cache_hit = False
         
-        # Fetch news articles
-        news_articles = news_service.fetch_latest_news(
-            limit=limit,
-            category=category if category != "all" else None
-        )
+        # Source 1: Try primary news service
+        try:
+            logger.info("Attempting to fetch from primary news service...")
+            sources_tried.append("primary")
+            news_articles = news_service.fetch_latest_news(
+                limit=limit,
+                category=category if category != "all" else None
+            )
+            if news_articles:
+                data_source = "primary_scraper"
+        except Exception as e:
+            logger.warning(f"Primary news source failed: {e}")
+            sources_tried.append("primary_failed")
+        
+        # Source 2: If primary failed, try akshare news
+        if not news_articles:
+            try:
+                logger.info("Attempting to fetch from akshare...")
+                sources_tried.append("akshare")
+                from stock_mcp_server.services.akshare_service import get_akshare_service
+                akshare = get_akshare_service()
+                news_articles = akshare.get_news(limit=limit)
+                if news_articles:
+                    data_source = "akshare"
+            except Exception as e:
+                logger.warning(f"AKShare news source failed: {e}")
+                sources_tried.append("akshare_failed")
+        
+        # Source 3: If both failed, try alternative news API
+        if not news_articles:
+            try:
+                logger.info("Attempting to fetch from alternative source...")
+                sources_tried.append("alternative")
+                news_articles = _fetch_from_alternative_source(limit, category)
+                if news_articles:
+                    data_source = "alternative"
+            except Exception as e:
+                logger.warning(f"Alternative news source failed: {e}")
+                sources_tried.append("alternative_failed")
         
         if not news_articles:
             return {
                 "success": False,
                 "metadata": {
                     "query_time": query_time,
-                    "data_source": "cache"
+                    "data_source": "none",
+                    "sources_tried": sources_tried
                 },
                 "error": {
-                    "code": "PARSE_ERROR",
-                    "message": "Failed to scrape news from all sources",
-                    "details": "All news sources unavailable or blocked"
+                    "code": "ALL_SOURCES_FAILED",
+                    "message": "Failed to fetch news from all available sources",
+                    "details": f"Tried {len(sources_tried)} sources: {', '.join(sources_tried)}"
                 }
             }
         
@@ -133,18 +172,21 @@ def get_news(
         # Convert to dict
         news_list = [article.model_dump() for article in news_articles]
         
-        return {
+        response = {
             "success": True,
             "news": news_list,
             "hot_topics": hot_topics if include_hot_topics else None,
             "overall_sentiment": overall_sentiment if include_sentiment else None,
             "metadata": {
                 "query_time": query_time,
-                "data_source": "scraped",
-                "sources_count": 2,  # Dongfang Fortune, Sina Finance
+                "data_source": data_source,
+                "sources_tried": sources_tried,
                 "cache_hit": cache_hit
             }
         }
+        
+        # Sanitize for JSON serialization (convert Decimal to float)
+        return sanitize_for_json(response)
         
     except Exception as e:
         logger.error(f"Error in get_news: {e}", exc_info=True)
@@ -160,3 +202,65 @@ def get_news(
                 "details": str(e)
             }
         }
+
+
+def _fetch_from_alternative_source(limit: int, category: str | None) -> list:
+    """Fetch news from alternative sources (Tencent, NetEase, etc.)
+    
+    Args:
+        limit: Number of articles to fetch
+        category: Category filter
+        
+    Returns:
+        List of NewsArticle objects
+    """
+    from stock_mcp_server.models.news import NewsArticle, NewsCategory
+    
+    articles = []
+    
+    try:
+        # Try to use akshare's news interface
+        import akshare as ak
+        
+        # Get financial news from akshare
+        try:
+            df = ak.news_cctv()  #央视新闻
+            if df is not None and not df.empty:
+                for idx, row in df.head(limit).iterrows():
+                    article = NewsArticle(
+                        title=str(row.get("title", "")),
+                        url=str(row.get("link", "")),
+                        source="央视财经",
+                        published_at=datetime.now(),
+                        category=NewsCategory.MARKET,
+                        summary=str(row.get("content", ""))[:200] if "content" in row else None,
+                        importance=5.0
+                    )
+                    articles.append(article)
+        except Exception as e:
+            logger.warning(f"Failed to fetch from CCTV news: {e}")
+        
+        # Try economic news
+        if len(articles) < limit:
+            try:
+                df = ak.news_economic()  # 经济日报
+                if df is not None and not df.empty:
+                    remaining = limit - len(articles)
+                    for idx, row in df.head(remaining).iterrows():
+                        article = NewsArticle(
+                            title=str(row.get("标题", "")),
+                            url=str(row.get("链接", "")),
+                            source="经济日报",
+                            published_at=datetime.now(),
+                            category=NewsCategory.POLICY,
+                            summary=str(row.get("内容", ""))[:200] if "内容" in row else None,
+                            importance=6.0
+                        )
+                        articles.append(article)
+            except Exception as e:
+                logger.warning(f"Failed to fetch from economic news: {e}")
+                
+    except Exception as e:
+        logger.error(f"Failed to fetch from alternative sources: {e}")
+    
+    return articles
