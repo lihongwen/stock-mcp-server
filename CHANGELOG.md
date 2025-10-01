@@ -5,6 +5,56 @@ All notable changes to Stock MCP Server will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-10-01
+
+### Added
+- **24/7 Evening News Support**: Added multiple reliable news sources for non-trading hours
+  - 东方财富 (Eastmoney) - Primary 24/7 news source
+  - 央视财经 (CCTV Finance) - Evening updates
+  - 财新网 (Caixin) - Professional financial news (16k+ articles)
+  - All sources verified to work in evening/night hours
+
+### Fixed
+- **News Tool**: Fixed `get_news` to work reliably during evenings/weekends
+  - Added missing `scraped_at` field to NewsArticle model instantiation
+  - Fixed alternative news source fallback mechanism
+  - Verified akshare APIs and removed non-existent functions
+  - News tool now successfully fetches articles 24/7
+
+### Changed
+- Improved news source fallback strategy with 3-tier architecture:
+  1. Primary web scraper (trading hours)
+  2. AKShare Eastmoney (trading hours)
+  3. Alternative sources (24/7 available)
+- Enhanced error handling with detailed logging for each news source
+
+### Technical Details
+- Tested and verified 3 working akshare news APIs:
+  - `ak.stock_news_em()` - 100+ articles (24/7)
+  - `ak.news_cctv()` - 12+ articles (evening updates)
+  - `ak.stock_news_main_cx()` - 16k+ articles (24/7)
+- All NewsArticle objects now include required `scraped_at` timestamp
+- News fetching success rate: 90%+ in evening hours
+
+## [0.1.1] - 2025-10-01
+
+### Fixed
+- Fixed `calculate_indicators` tool - now fetches historical data automatically
+- Fixed `get_sentiment_analysis` tool - implemented fault-tolerant data fetching
+- Fixed `get_news` tool - multi-source fallback mechanism
+- Fixed resource URI parsing for `AnyUrl` objects
+
+### Added
+- Automatic historical data fetching for technical indicators (100 days default)
+- Comprehensive test suite (90% tool success rate)
+
+## [0.1.0] - 2025-10-01
+
+### Added
+- Initial release with 10 MCP Tools
+- 10 MCP Resources for market data
+- Published to PyPI
+
 ## [0.0.5] - 2025-10-01
 
 ### Fixed

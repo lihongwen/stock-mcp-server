@@ -205,7 +205,10 @@ def get_news(
 
 
 def _fetch_from_alternative_source(limit: int, category: str | None) -> list:
-    """Fetch news from alternative sources (Tencent, NetEase, etc.)
+    """Fetch news from alternative sources - 24/7 available sources.
+    
+    These sources work reliably in non-trading hours (evenings/weekends).
+    Uses only verified akshare APIs that exist.
     
     Args:
         limit: Number of articles to fetch
@@ -219,48 +222,93 @@ def _fetch_from_alternative_source(limit: int, category: str | None) -> list:
     articles = []
     
     try:
-        # Try to use akshare's news interface
         import akshare as ak
         
-        # Get financial news from akshare
+        # Source 1: 东方财富新闻 (24/7 available, most reliable)
         try:
-            df = ak.news_cctv()  #央视新闻
+            logger.info("Trying Eastmoney News (stock_news_em)...")
+            df = ak.stock_news_em()
             if df is not None and not df.empty:
                 for idx, row in df.head(limit).iterrows():
-                    article = NewsArticle(
-                        title=str(row.get("title", "")),
-                        url=str(row.get("link", "")),
-                        source="央视财经",
-                        published_at=datetime.now(),
-                        category=NewsCategory.MARKET,
-                        summary=str(row.get("content", ""))[:200] if "content" in row else None,
-                        importance=5.0
-                    )
-                    articles.append(article)
+                    try:
+                        article = NewsArticle(
+                            title=str(row.get("新闻标题", "")),
+                            url=str(row.get("新闻链接", "")),
+                            source="东方财富",
+                            published_at=datetime.now(),
+                            category=NewsCategory.MARKET,
+                            summary=str(row.get("新闻内容", ""))[:200] if "新闻内容" in row else None,
+                            importance=6.0,
+                            scraped_at=datetime.now()
+                        )
+                        articles.append(article)
+                    except Exception as e:
+                        logger.debug(f"Skip one news item: {e}")
+                        continue
         except Exception as e:
-            logger.warning(f"Failed to fetch from CCTV news: {e}")
+            logger.warning(f"Failed to fetch from Eastmoney: {e}")
         
-        # Try economic news
+        # Source 2: 央视新闻 (CCTV - reliable in evenings)
         if len(articles) < limit:
             try:
-                df = ak.news_economic()  # 经济日报
+                logger.info("Trying CCTV Finance (news_cctv)...")
+                df = ak.news_cctv()
                 if df is not None and not df.empty:
                     remaining = limit - len(articles)
                     for idx, row in df.head(remaining).iterrows():
-                        article = NewsArticle(
-                            title=str(row.get("标题", "")),
-                            url=str(row.get("链接", "")),
-                            source="经济日报",
-                            published_at=datetime.now(),
-                            category=NewsCategory.POLICY,
-                            summary=str(row.get("内容", ""))[:200] if "内容" in row else None,
-                            importance=6.0
-                        )
-                        articles.append(article)
+                        try:
+                            article = NewsArticle(
+                                title=str(row.get("title", "")),
+                                url="https://tv.cctv.com/lm/jjxx/",
+                                source="央视财经",
+                                published_at=datetime.now(),
+                                category=NewsCategory.MARKET,
+                                summary=str(row.get("content", ""))[:200] if "content" in row else None,
+                                importance=7.0,
+                                scraped_at=datetime.now()
+                            )
+                            articles.append(article)
+                        except Exception as e:
+                            logger.debug(f"Skip one news item: {e}")
+                            continue
             except Exception as e:
-                logger.warning(f"Failed to fetch from economic news: {e}")
+                logger.warning(f"Failed to fetch from CCTV news: {e}")
+        
+        # Source 3: 财新网新闻 (Caixin - professional, 16k+ articles!)
+        if len(articles) < limit:
+            try:
+                logger.info("Trying Caixin News (stock_news_main_cx)...")
+                df = ak.stock_news_main_cx()
+                if df is not None and not df.empty:
+                    remaining = limit - len(articles)
+                    for idx, row in df.head(remaining).iterrows():
+                        try:
+                            # Caixin uses 'summary' as title and 'tag' for category
+                            summary = str(row.get("summary", ""))
+                            url = str(row.get("url", "https://www.caixin.com"))
+                            tag = str(row.get("tag", ""))
+                            
+                            if summary:  # Only add if we have a summary
+                                article = NewsArticle(
+                                    title=summary[:100] if len(summary) > 100 else summary,
+                                    url=url,
+                                    source="财新网",
+                                    published_at=datetime.now(),
+                                    category=NewsCategory.MARKET,
+                                    summary=summary[:200],
+                                    importance=8.0,
+                                    tags=[tag] if tag else None,
+                                    scraped_at=datetime.now()
+                                )
+                                articles.append(article)
+                        except Exception as e:
+                            logger.debug(f"Skip one Caixin news item: {e}")
+                            continue
+            except Exception as e:
+                logger.warning(f"Failed to fetch from Caixin: {e}")
                 
     except Exception as e:
         logger.error(f"Failed to fetch from alternative sources: {e}")
     
+    logger.info(f"Alternative sources fetched {len(articles)} articles")
     return articles
